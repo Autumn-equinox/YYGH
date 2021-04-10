@@ -11,5 +11,12 @@
 
     <artifactId>common_util</artifactId>
 
+    <dependencies>
+        <!--根据日期显示星期-->
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+        </dependency>
+    </dependencies>
 
 </project>
