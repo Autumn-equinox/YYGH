@@ -4,6 +4,7 @@ import gitee.equinox.yygh.model.hosp.Hospital;
 import gitee.equinox.yygh.vo.hosp.HospitalQueryVo;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
 import java.util.Map;
 
 public interface HospitalService {
@@ -22,4 +23,10 @@ public interface HospitalService {
 
     //获取医院名称
     String getHospName(String hoscode);
+
+    //根据医院名称获取医院列表,模糊查询
+    List<Hospital> findByHosName(String hosname);
+
+    //医院预约挂号详情
+    Map<String, Object> item(String hoscode);
 }
