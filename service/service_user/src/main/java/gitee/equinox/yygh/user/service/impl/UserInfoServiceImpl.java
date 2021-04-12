@@ -21,40 +21,56 @@ import java.util.Map;
 public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> implements UserInfoService {
 
     @Autowired
-    private RedisTemplate<String,String> redisTemplate;
+    private RedisTemplate<String, String> redisTemplate;
+
     //手机号实现登录
     @Override
     public Map<String, Object> login(LoginVo loginVo) {
         String phone = loginVo.getPhone();
         String code = loginVo.getCode();
         //校验参数
-        if(StringUtils.isEmpty(phone) ||
+        if (StringUtils.isEmpty(phone) ||
                 StringUtils.isEmpty(code)) {
             throw new YyghException(ResultCodeEnum.PARAM_ERROR);
         }
 
         //校验校验验证码
         String mobleCode = redisTemplate.opsForValue().get(phone);
-        if(!code.equals(mobleCode)) {
+        if (!code.equals(mobleCode)) {
             throw new YyghException(ResultCodeEnum.CODE_ERROR);//验证码错误
         }
 
-
-        //手机号已被使用
-        QueryWrapper<UserInfo> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("phone", phone);
-        //获取会员
-        UserInfo userInfo = baseMapper.selectOne(queryWrapper);
-        if(null == userInfo) {
-            //第一次登陆
-            userInfo = new UserInfo();
-            userInfo.setName("");
-            userInfo.setPhone(phone);
-            userInfo.setStatus(1);
-            baseMapper.insert(userInfo);
+        //绑定手机号码
+        UserInfo userInfo = null;
+        if (!StringUtils.isEmpty(loginVo.getOpenid())) {
+            userInfo = this.selectWxInfoOpenId(loginVo.getOpenid());
+            if (null != userInfo) {
+                userInfo.setPhone(loginVo.getPhone());
+                this.updateById(userInfo);
+            } else {
+                throw new YyghException(ResultCodeEnum.DATA_ERROR);
+            }
         }
+
+        //userinfo为空，添加信息，正常手机登录
+        if (userInfo == null) {
+            //手机号已被使用
+            QueryWrapper<UserInfo> queryWrapper = new QueryWrapper<>();
+            queryWrapper.eq("phone", phone);
+            //获取会员
+            userInfo = baseMapper.selectOne(queryWrapper);
+            if (null == userInfo) {
+                //第一次登陆
+                userInfo = new UserInfo();
+                userInfo.setName("");
+                userInfo.setPhone(phone);
+                userInfo.setStatus(1);
+                baseMapper.insert(userInfo);
+            }
+        }
+
         //校验是否被禁用
-        if(userInfo.getStatus() == 0) {
+        if (userInfo.getStatus() == 0) {
             throw new YyghException(ResultCodeEnum.LOGIN_DISABLED_ERROR);
         }
 
@@ -62,11 +78,11 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
         Map<String, Object> map = new HashMap<>();
         String name = userInfo.getName();
         //名字为空，取昵称
-        if(StringUtils.isEmpty(name)) {
+        if (StringUtils.isEmpty(name)) {
             name = userInfo.getNickName();
         }
         //名字为空，昵称为空，取电话号
-        if(StringUtils.isEmpty(name)) {
+        if (StringUtils.isEmpty(name)) {
             name = userInfo.getPhone();
         }
         map.put("name", name);
@@ -74,5 +90,14 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
         String token = JwtHelper.createToken(userInfo.getId(), name);
         map.put("token", token);
         return map;
+    }
+
+    //根据openid判断，数据库中是否已经存在微信扫描人的信息
+    @Override
+    public UserInfo selectWxInfoOpenId(String openid) {
+        QueryWrapper<UserInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("openid", openid);
+        UserInfo userInfo = baseMapper.selectOne(queryWrapper);
+        return userInfo;
     }
 }
