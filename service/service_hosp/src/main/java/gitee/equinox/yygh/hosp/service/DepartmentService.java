@@ -21,4 +21,7 @@ public interface DepartmentService {
 
     //获取科室名称
     String getDepName(String hoscode, String depcode);
+
+    //获取科室
+    Department getDepartment(String hoscode, String depcode);
 }

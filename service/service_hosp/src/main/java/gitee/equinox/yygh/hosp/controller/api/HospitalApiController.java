@@ -3,6 +3,7 @@ package gitee.equinox.yygh.hosp.controller.api;
 import gitee.equinox.yygh.common.result.Result;
 import gitee.equinox.yygh.hosp.service.DepartmentService;
 import gitee.equinox.yygh.hosp.service.HospitalService;
+import gitee.equinox.yygh.hosp.service.ScheduleService;
 import gitee.equinox.yygh.model.hosp.Hospital;
 import gitee.equinox.yygh.vo.hosp.HospitalQueryVo;
 import io.swagger.annotations.Api;
@@ -63,6 +64,38 @@ public class HospitalApiController {
     public Result item(@PathVariable String hoscode) {
         Map<String,Object> map = hospitalService.item(hoscode);
         return Result.ok(map);
+    }
+
+    @Autowired
+    private ScheduleService scheduleService;
+
+    //获取排班可预约日期数据
+    @ApiOperation(value = "获取可预约排班数据")
+    @GetMapping("auth/getBookingScheduleRule/{page}/{limit}/{hoscode}/{depcode}")
+    public Result getBookingSchedule(
+            @PathVariable Integer page,
+            @PathVariable Integer limit,
+            @PathVariable String hoscode,
+            @PathVariable String depcode) {
+        return Result.ok(scheduleService.getBookingScheduleRule(page, limit, hoscode, depcode));
+    }
+
+    //获取排班具体数据
+    @ApiOperation(value = "获取排班数据")
+    @GetMapping("auth/findScheduleList/{hoscode}/{depcode}/{workDate}")
+    public Result findScheduleList(
+            @PathVariable String hoscode,
+            @PathVariable String depcode,
+            @PathVariable String workDate) {
+        return Result.ok(scheduleService.getDetailSchedule(hoscode, depcode, workDate));
+    }
+
+    //1、根据排班id获取排班信息，在页面展示
+    @ApiOperation(value = "根据排班id获取排班数据")
+    @GetMapping("getSchedule/{scheduleId}")
+    public Result getSchedule(
+            @PathVariable String scheduleId) {
+        return Result.ok(scheduleService.getById(scheduleId));
     }
 
 

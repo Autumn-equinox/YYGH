@@ -20,4 +20,10 @@ public interface ScheduleService {
 
     //根据医院编号 、科室编号和工作日期，查询排班详细信息
     List<Schedule> getDetailSchedule(String hoscode, String depcode, String workDate);
+
+    //获取排班可预约日期数据
+    Map<String,Object> getBookingScheduleRule(Integer page, Integer limit, String hoscode, String depcode);
+
+    //1、根据排班id获取排班信息，在页面展示
+    Schedule getById(String scheduleId);
 }

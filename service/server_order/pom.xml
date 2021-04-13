@@ -9,11 +9,11 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>service_user</artifactId>
+    <artifactId>server_order</artifactId>
 
 
     <dependencies>
-        <!--远程调用数据字典模块-->
+        <!--远程调用-->
         <dependency>
             <groupId>gitee.equinox</groupId>
             <artifactId>service_cmn_client</artifactId>
