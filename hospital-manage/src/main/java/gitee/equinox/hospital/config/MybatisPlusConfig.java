@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  */
 @EnableTransactionManagement
 @Configuration
-@MapperScan("gitee.equinox.hospital.mapper")
+@MapperScan(basePackages = "gitee.equinox.hospital.mapper")
 public class MybatisPlusConfig {
 
     /**

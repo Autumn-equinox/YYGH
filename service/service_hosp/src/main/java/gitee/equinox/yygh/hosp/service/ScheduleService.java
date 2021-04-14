@@ -1,6 +1,7 @@
 package gitee.equinox.yygh.hosp.service;
 
 import gitee.equinox.yygh.model.hosp.Schedule;
+import gitee.equinox.yygh.vo.hosp.ScheduleOrderVo;
 import gitee.equinox.yygh.vo.hosp.ScheduleQueryVo;
 import org.springframework.data.domain.Page;
 
@@ -26,4 +27,13 @@ public interface ScheduleService {
 
     //1、根据排班id获取排班信息，在页面展示
     Schedule getById(String scheduleId);
+
+    //根据排班id获取预约下单数据
+    ScheduleOrderVo getScheduleOrderVo(String scheduleId);
+
+    /**
+     * mq修改排班
+     */
+    void update(Schedule schedule);
+
 }

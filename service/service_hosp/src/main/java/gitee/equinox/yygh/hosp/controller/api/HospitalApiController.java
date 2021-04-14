@@ -3,11 +3,15 @@ package gitee.equinox.yygh.hosp.controller.api;
 import gitee.equinox.yygh.common.result.Result;
 import gitee.equinox.yygh.hosp.service.DepartmentService;
 import gitee.equinox.yygh.hosp.service.HospitalService;
+import gitee.equinox.yygh.hosp.service.HospitalSetService;
 import gitee.equinox.yygh.hosp.service.ScheduleService;
 import gitee.equinox.yygh.model.hosp.Hospital;
 import gitee.equinox.yygh.vo.hosp.HospitalQueryVo;
+import gitee.equinox.yygh.vo.hosp.ScheduleOrderVo;
+import gitee.equinox.yygh.vo.order.SignInfoVo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -98,6 +102,22 @@ public class HospitalApiController {
         return Result.ok(scheduleService.getById(scheduleId));
     }
 
+    //根据排班id获取预约下单数据
+    @ApiOperation(value = "根据排班id获取预约下单数据")
+    @GetMapping("inner/getScheduleOrderVo/{scheduleId}")
+    public ScheduleOrderVo getScheduleOrderVo(
+            @ApiParam(name = "scheduleId", value = "排班id", required = true)
+            @PathVariable("scheduleId") String scheduleId) {
+        return scheduleService.getScheduleOrderVo(scheduleId);
+    }
 
+    @Autowired
+    private HospitalSetService hospitalSetService;
+    //获取医院签名信息
+    @ApiOperation(value = "获取医院签名信息")
+    @GetMapping("inner/getSignInfoVo/{hoscode}")
+    public SignInfoVo getSignInfoVo(@PathVariable("hoscode") String hoscode) {
+        return hospitalSetService.getSignInfoVo(hoscode);
+    }
 }
 

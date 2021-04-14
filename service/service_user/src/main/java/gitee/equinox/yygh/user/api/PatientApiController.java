@@ -4,6 +4,8 @@ import gitee.equinox.yygh.common.result.Result;
 import gitee.equinox.yygh.common.utils.AuthContextHolder;
 import gitee.equinox.yygh.model.user.Patient;
 import gitee.equinox.yygh.user.service.PatientService;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -57,4 +59,10 @@ public class PatientApiController {
         return Result.ok();
     }
 
+    //根据就诊人的id获取信息
+    @ApiOperation(value = "获取就诊人")
+    @GetMapping("inner/get/{id}")
+    public Patient getPatientOrder(@PathVariable("id") Long id) {
+        return patientService.getPatientId(id);
+    }
 }
