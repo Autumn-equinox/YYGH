@@ -16,12 +16,11 @@ import gitee.equinox.yygh.model.order.OrderInfo;
 import gitee.equinox.yygh.model.user.Patient;
 import gitee.equinox.yygh.order.mapper.OrderInfoMapper;
 import gitee.equinox.yygh.order.service.OrderService;
+import gitee.equinox.yygh.order.service.WeixinService;
 import gitee.equinox.yygh.user.client.PatientFeignClient;
 import gitee.equinox.yygh.vo.hosp.ScheduleOrderVo;
 import gitee.equinox.yygh.vo.msm.MsmVo;
-import gitee.equinox.yygh.vo.order.OrderMqVo;
-import gitee.equinox.yygh.vo.order.OrderQueryVo;
-import gitee.equinox.yygh.vo.order.SignInfoVo;
+import gitee.equinox.yygh.vo.order.*;
 import org.joda.time.DateTime;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,8 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo> implements OrderService {
@@ -186,23 +187,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo> im
         String createTimeEnd = orderQueryVo.getCreateTimeEnd();
         //对条件值进行非空判断
         QueryWrapper<OrderInfo> wrapper = new QueryWrapper<>();
-        if(!StringUtils.isEmpty(name)) {
-            wrapper.like("hosname",name);
+        if (!StringUtils.isEmpty(name)) {
+            wrapper.like("hosname", name);
         }
-        if(!StringUtils.isEmpty(patientId)) {
-            wrapper.eq("patient_id",patientId);
+        if (!StringUtils.isEmpty(patientId)) {
+            wrapper.eq("patient_id", patientId);
         }
-        if(!StringUtils.isEmpty(orderStatus)) {
-            wrapper.eq("order_status",orderStatus);
+        if (!StringUtils.isEmpty(orderStatus)) {
+            wrapper.eq("order_status", orderStatus);
         }
-        if(!StringUtils.isEmpty(reserveDate)) {
-            wrapper.ge("reserve_date",reserveDate);
+        if (!StringUtils.isEmpty(reserveDate)) {
+            wrapper.ge("reserve_date", reserveDate);
         }
-        if(!StringUtils.isEmpty(createTimeBegin)) {
-            wrapper.ge("create_time",createTimeBegin);
+        if (!StringUtils.isEmpty(createTimeBegin)) {
+            wrapper.ge("create_time", createTimeBegin);
         }
-        if(!StringUtils.isEmpty(createTimeEnd)) {
-            wrapper.le("create_time",createTimeEnd);
+        if (!StringUtils.isEmpty(createTimeEnd)) {
+            wrapper.le("create_time", createTimeEnd);
         }
         //调用mapper的方法
         IPage<OrderInfo> pages = baseMapper.selectPage(pageParam, wrapper);
@@ -211,6 +212,111 @@ public class OrderServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo> im
             this.packOrderInfo(item);
         });
         return pages;
+    }
+
+    @Autowired
+    private WeixinService weixinService;
+
+    //取消预约
+    @Override
+    public boolean cancelOrder(Long orderId) {
+        //1.根据订单id得到订单信息
+        OrderInfo orderInfo = this.getById(orderId);
+        //当前时间大于退号时间，不能取消预约
+        DateTime quitTime = new DateTime(orderInfo.getQuitTime());
+        if (quitTime.isBeforeNow()) {
+            throw new YyghException(ResultCodeEnum.CANCEL_ORDER_NO);
+        }
+
+        SignInfoVo signInfoVo = hospitalFeignClient.getSignInfoVo(orderInfo.getHoscode());
+        if (null == signInfoVo) {
+            throw new YyghException(ResultCodeEnum.PARAM_ERROR);
+        }
+
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("hoscode", orderInfo.getHoscode());
+        reqMap.put("hosRecordId", orderInfo.getHosRecordId());
+        reqMap.put("timestamp", HttpRequestHelper.getTimestamp());
+        String sign = HttpRequestHelper.getSign(reqMap, signInfoVo.getSignKey());
+        reqMap.put("sign", sign);
+        JSONObject result = HttpRequestHelper.sendRequest(reqMap, signInfoVo.getApiUrl() + "/order/updateCancelStatus");
+
+        if (result.getInteger("code") != 200) {
+            throw new YyghException(result.getString("message"), ResultCodeEnum.FAIL.getCode());
+        } else {
+            //是否支付 退款
+            if (orderInfo.getOrderStatus().intValue() == OrderStatusEnum.PAID.getStatus().intValue()) {
+                //已支付 退款
+                boolean isRefund = weixinService.refund(orderId);
+                if (!isRefund) {
+                    throw new YyghException(ResultCodeEnum.CANCEL_ORDER_FAIL);
+                }
+            }
+
+            //更改订单状态
+            orderInfo.setOrderStatus(OrderStatusEnum.CANCLE.getStatus());
+            this.updateById(orderInfo);
+            //发送mq信息更新预约数 我们与下单成功更新预约数使用相同的mq信息，不设置可预约数与剩余预约数，接收端可预约数减1即可
+            OrderMqVo orderMqVo = new OrderMqVo();
+            orderMqVo.setScheduleId(orderInfo.getScheduleId());
+            //短信提示
+            MsmVo msmVo = new MsmVo();
+            msmVo.setPhone(orderInfo.getPatientPhone());
+            msmVo.setTemplateCode("SMS_194640722");
+            String reserveDate = new DateTime(orderInfo.getReserveDate()).toString("yyyy-MM-dd") + (orderInfo.getReserveTime() == 0 ? "上午" : "下午");
+            Map<String, Object> param = new HashMap<String, Object>() {{
+                put("title", orderInfo.getHosname() + "|" + orderInfo.getDepname() + "|" + orderInfo.getTitle());
+                put("reserveDate", reserveDate);
+                put("name", orderInfo.getPatientName());
+            }};
+            msmVo.setParam(param);
+            orderMqVo.setMsmVo(msmVo);
+            rabbitService.sendMessage(MqConst.EXCHANGE_DIRECT_ORDER, MqConst.ROUTING_ORDER, orderMqVo);
+        }
+        return true;
+    }
+
+    //添加mq监听，就诊通知
+    @Override
+    public void patientTips() {
+        QueryWrapper<OrderInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("reserve_date", new DateTime().toString("yyyy-MM-dd"));
+        queryWrapper.ne("order_status", OrderStatusEnum.CANCLE.getStatus());
+        List<OrderInfo> orderInfoList = baseMapper.selectList(queryWrapper);
+        System.out.println("要通知的订单为------------->" + orderInfoList);
+        //遍历发送消息
+        for (OrderInfo orderInfo : orderInfoList) {
+            //短信提示
+            MsmVo msmVo = new MsmVo();
+            msmVo.setPhone(orderInfo.getPatientPhone());
+            String reserveDate = new DateTime(orderInfo.getReserveDate()).toString("yyyy-MM-dd") + (orderInfo.getReserveTime() == 0 ? "上午" : "下午");
+            Map<String, Object> param = new HashMap<String, Object>() {{
+                put("title", orderInfo.getHosname() + "|" + orderInfo.getDepname() + "|" + orderInfo.getTitle());
+                put("reserveDate", reserveDate);
+                put("name", orderInfo.getPatientName());
+            }};
+            msmVo.setParam(param);
+            //测试
+            System.out.println("短信vo=============>" + msmVo);
+            //rabbitService.sendMessage(MqConst.EXCHANGE_DIRECT_MSM, MqConst.ROUTING_MSM_ITEM, msmVo);
+        }
+
+    }
+
+    //订单统计
+    @Override
+    public Map<String, Object> getCountMap(OrderCountQueryVo orderCountQueryVo) {
+        //调用mapper方法得到数据
+        List<OrderCountVo> orderCountVoList = baseMapper.selectOrderCount(orderCountQueryVo);
+        //获取x轴参数，日期
+        List<String> dateList = orderCountVoList.stream().map(OrderCountVo::getReserveDate).collect(Collectors.toList());
+        //获取y轴参数，数量
+        List<Integer> countList = orderCountVoList.stream().map(OrderCountVo::getCount).collect(Collectors.toList());
+        //创建map
+        Map<String, Object> map = new HashMap<>();
+        map.put("dateList", dateList);
+        map.put("countList", countList);
+        return map;
     }
 
     private OrderInfo packOrderInfo(OrderInfo orderInfo) {

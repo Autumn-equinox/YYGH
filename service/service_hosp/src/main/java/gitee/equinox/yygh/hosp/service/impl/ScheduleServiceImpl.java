@@ -319,7 +319,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         //当天停止挂号时间
         DateTime stopTime = this.getDateTime(new Date(), bookingRule.getStopTime());
-        scheduleOrderVo.setStartTime(stopTime.toDate());
+        scheduleOrderVo.setStopTime(stopTime.toDate());
         return scheduleOrderVo;
     }
 

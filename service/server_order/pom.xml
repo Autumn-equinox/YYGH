@@ -46,4 +46,18 @@
         </dependency>
 
     </dependencies>
+
+
+    <build>
+        <!--项目打包时，将java目录中，的xml文件进行打包-->
+        <resources>
+            <resource>
+                <directory>src/main/java</directory>
+                <includes>
+                    <include>**/*.xml</include>
+                </includes>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
+    </build>
 </project>
